@@ -1,5 +1,3 @@
-import asyncio
-
 import aiohttp
 from aioshelly.common import ConnectionOptions
 from aioshelly.rpc_device import RpcDevice
@@ -7,7 +5,7 @@ from aioshelly.rpc_device import RpcDevice
 import settings
 
 
-async def set_switch_state(id: int, on: bool):
+async def _switch_rpc(id: int, method: str, params: dict | None = None):
     inverter = next(inv for inv in settings.INVERTERS if inv["id"] == id)
     switch = inverter["switch"]
 
@@ -21,15 +19,20 @@ async def set_switch_state(id: int, on: bool):
         device = await RpcDevice.create(session, None, options)
         await device.initialize()
         try:
-            await device.call_rpc("Switch.Set", {"id": switch["channel"], "on": on})
+            return await device.call_rpc(
+                method, {"id": switch["channel"], **(params or {})}
+            )
         finally:
             await device.shutdown()
 
 
-async def set_switch_states(states: list[dict]):
-    await asyncio.gather(
-        *(set_switch_state(state["id"], state["on"]) for state in states)
-    )
+async def set_switch_state(id: int, on: bool):
+    await _switch_rpc(id, "Switch.Set", {"on": on})
+
+
+async def get_switch_state(id: int) -> bool:
+    status = await _switch_rpc(id, "Switch.GetStatus")
+    return status["output"]
 
 
 def main():
