@@ -6,8 +6,50 @@ import aiohttp
 from aioshelly.common import ConnectionOptions
 from aioshelly.rpc_device import RpcDevice
 
-import settings
 from energy import get_consumption
+
+# Seconds between control loop updates
+UPDATE_INTERVAL = 60
+
+# How long to switch on an off inverter to measure its actual output
+PROBE_SECONDS = 15
+
+# Minimum time between probes of the same inverter; within this interval
+# the last probed value is reused
+PROBE_MIN_INTERVAL = 15 * 60
+
+INVERTERS = [
+    {
+        "id": 1,
+        "power": 800,
+        "switch": {"ip": "192.168.1.101", "channel": 0, "auth": None},
+        "monitor": {"ip": "192.168.1.111", "channel": 0, "auth": None},
+    },
+    {
+        "id": 2,
+        "power": 800,
+        "switch": {"ip": "192.168.1.102", "channel": 0, "auth": None},
+        "monitor": {"ip": "192.168.1.112", "channel": 0, "auth": None},
+    },
+    {
+        "id": 3,
+        "power": 600,
+        "switch": {"ip": "192.168.1.103", "channel": 0, "auth": None},
+        "monitor": None,
+    },
+    {
+        "id": 4,
+        "power": 1200,
+        "switch": {"ip": "192.168.1.104", "channel": 0, "auth": None},
+        "monitor": None,
+    },
+    {
+        "id": 5,
+        "power": 2000,
+        "switch": {"ip": "192.168.1.105", "channel": 0, "auth": None},
+        "monitor": None,
+    },
+]
 
 
 async def _device_rpc(device: dict, method: str, params: dict | None = None):
@@ -33,7 +75,7 @@ _last_probe: dict[int, tuple[float, float]] = {}
 
 
 def _get_inverter(id: int) -> dict:
-    return next(inv for inv in settings.INVERTERS if inv["id"] == id)
+    return next(inv for inv in INVERTERS if inv["id"] == id)
 
 
 async def set_switch_state(id: int, on: bool):
@@ -63,11 +105,11 @@ async def get_inverter_power(id: int) -> float:
         return 0
     if last := _last_probe.get(id):
         timestamp, power = last
-        if time.monotonic() - timestamp < settings.PROBE_MIN_INTERVAL:
+        if time.monotonic() - timestamp < PROBE_MIN_INTERVAL:
             return power
     await set_switch_state(id, True)
     try:
-        await asyncio.sleep(settings.PROBE_SECONDS)
+        await asyncio.sleep(PROBE_SECONDS)
         status = await _device_rpc(monitor, "Switch.GetStatus")
     finally:
         await set_switch_state(id, False)
@@ -80,9 +122,9 @@ async def find_best_inverter_combination(consumption: float) -> list[dict]:
     """Find the inverters whose combined power gets closest to the given
     consumption without exceeding it, so no power is fed back to the grid."""
     powers = await asyncio.gather(
-        *(get_inverter_power(inv["id"]) for inv in settings.INVERTERS)
+        *(get_inverter_power(inv["id"]) for inv in INVERTERS)
     )
-    candidates = list(zip(settings.INVERTERS, powers))
+    candidates = list(zip(INVERTERS, powers))
 
     best: list[dict] = []
     best_power = 0
@@ -104,7 +146,7 @@ async def update():
     await asyncio.gather(
         *(
             set_switch_state(inverter["id"], inverter["id"] in ids)
-            for inverter in settings.INVERTERS
+            for inverter in INVERTERS
         )
     )
 
@@ -115,7 +157,7 @@ async def run():
             await update()
         except Exception as e:
             print(f"Update failed: {e}")
-        await asyncio.sleep(settings.UPDATE_INTERVAL)
+        await asyncio.sleep(UPDATE_INTERVAL)
 
 
 def main():
