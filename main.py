@@ -1,4 +1,5 @@
 import asyncio
+import time
 from itertools import combinations
 
 import aiohttp
@@ -24,6 +25,10 @@ async def _device_rpc(device: dict, method: str, params: dict | None = None):
             )
         finally:
             await shelly.shutdown()
+
+
+# Last probe per inverter id: (monotonic timestamp, measured power)
+_last_probe: dict[int, tuple[float, float]] = {}
 
 
 def _get_inverter(id: int) -> dict:
@@ -55,13 +60,19 @@ async def get_inverter_power(id: int) -> float:
     if await get_switch_state(id):
         # On but producing nothing (e.g. after dark): believe the meter
         return 0
+    if last := _last_probe.get(id):
+        timestamp, power = last
+        if time.monotonic() - timestamp < settings.PROBE_MIN_INTERVAL:
+            return power
     await set_switch_state(id, True)
     try:
         await asyncio.sleep(settings.PROBE_SECONDS)
         status = await _device_rpc(monitor, "Switch.GetStatus")
     finally:
         await set_switch_state(id, False)
-    return status.get("apower") or 0
+    power = status.get("apower") or 0
+    _last_probe[id] = (time.monotonic(), power)
+    return power
 
 
 async def find_best_inverter_combination(consumption: float) -> list[dict]:

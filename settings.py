@@ -1,6 +1,10 @@
 # How long to switch on an off inverter to measure its actual output
 PROBE_SECONDS = 15
 
+# Minimum time between probes of the same inverter; within this interval
+# the last probed value is reused
+PROBE_MIN_INTERVAL = 15 * 60
+
 INVERTERS = [
     {
         "id": 1,
