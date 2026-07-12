@@ -1,3 +1,6 @@
+# Seconds between control loop updates
+UPDATE_INTERVAL = 60
+
 # How long to switch on an off inverter to measure its actual output
 PROBE_SECONDS = 15
 

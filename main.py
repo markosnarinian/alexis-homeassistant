@@ -7,6 +7,7 @@ from aioshelly.common import ConnectionOptions
 from aioshelly.rpc_device import RpcDevice
 
 import settings
+from energy import get_consumption
 
 
 async def _device_rpc(device: dict, method: str, params: dict | None = None):
@@ -94,8 +95,31 @@ async def find_best_inverter_combination(consumption: float) -> list[dict]:
     return best
 
 
+async def update():
+    """One control cycle: match running inverters to current consumption."""
+    consumption = get_consumption()
+    combination = await find_best_inverter_combination(consumption)
+    ids = {inverter["id"] for inverter in combination}
+    print(f"Consumption {consumption} W -> switching on inverters {sorted(ids)}")
+    await asyncio.gather(
+        *(
+            set_switch_state(inverter["id"], inverter["id"] in ids)
+            for inverter in settings.INVERTERS
+        )
+    )
+
+
+async def run():
+    while True:
+        try:
+            await update()
+        except Exception as e:
+            print(f"Update failed: {e}")
+        await asyncio.sleep(settings.UPDATE_INTERVAL)
+
+
 def main():
-    pass
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
