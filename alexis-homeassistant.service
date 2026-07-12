@@ -1,0 +1,12 @@
+[Unit]
+Description=Alexis solar inverter controller
+
+[Service]
+Type=simple
+WorkingDirectory=%h/alexis-homeassistant
+ExecStart=%h/.local/bin/uv run main.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
