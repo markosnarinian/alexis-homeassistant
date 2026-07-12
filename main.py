@@ -1,3 +1,5 @@
+from itertools import combinations
+
 import aiohttp
 from aioshelly.common import ConnectionOptions
 from aioshelly.rpc_device import RpcDevice
@@ -33,6 +35,19 @@ async def set_switch_state(id: int, on: bool):
 async def get_switch_state(id: int) -> bool:
     status = await _switch_rpc(id, "Switch.GetStatus")
     return status["output"]
+
+
+def find_best_inverter_combination(consumption: float) -> list[dict]:
+    """Find the inverters whose combined power gets closest to the given
+    consumption without exceeding it, so no power is fed back to the grid."""
+    best: list[dict] = []
+    best_power = 0
+    for r in range(1, len(settings.INVERTERS) + 1):
+        for combo in combinations(settings.INVERTERS, r):
+            total = sum(inv["power"] for inv in combo)
+            if best_power < total <= consumption:
+                best, best_power = list(combo), total
+    return best
 
 
 def main():
